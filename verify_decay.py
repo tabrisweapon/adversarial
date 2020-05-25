@@ -50,6 +50,8 @@ parser.add_argument('--save-freq', '-s', default=5, type=int, metavar='N',
                     help='save frequency')
 parser.add_argument('--train-nat', action='store_true', default=False,
                     help='disables CUDA training')
+parser.add_argument('--width', type=int, default=1,
+                    help='network width')
 
 args = parser.parse_args()
 
@@ -106,28 +108,40 @@ def train(args, model, device, train_loader, optimizer, epoch):
             nat_grad = {}
             for name, param in model.named_parameters():
                 if 'weight' in name and param.grad is not None:
-                    nat_grad[name] = param.grad.clone()
+                    nat_grad[name] = param.grad.clone().detach()
             
             optimizer.zero_grad()
+            # test a random point in ball
+            # x_inball = data.detach()+ 0.031 * torch.randn(data.shape).cuda().detach()
+            # x_inball = torch.clamp(x_inball, 0.0, 1.0)
+            # adv_loss = F.cross_entropy(model(x_inball), target)
+            
             adv_loss = F.cross_entropy(model(x_adv), target)
             adv_loss.backward()
             all_bn = 0
-            
+            bn_counter = 0.0
+            all_conv = 0  
+            conv_counter = 0.0
             for name, param in model.named_parameters():
                 if 'weight' in name and param.grad is not None:
                     summary_values = torch.mean(torch.abs(param.grad.clone()))
                     writer.add_scalar(name, summary_values,  global_step=global_step)
 
-                    summary_tag = 'vwd' + name
-                    diffs = (param.grad.clone() - nat_grad[name]) / param.clone()
+                    summary_tag = 'L1.' + name
+                    diffs = (param.grad.clone().detach() - nat_grad[name]) / torch.sign(param.clone().detach())
                     mean_diff = torch.mean(diffs)
                     writer.add_scalar(summary_tag, mean_diff, global_step=global_step)
-                    if 'bn' in name and param.grad is not None:
+                    if 'bn' in name:
                         all_bn = all_bn + mean_diff
+                        bn_counter += 1
+                    elif 'conv' in name:
+                        all_conv = all_conv + mean_diff
+                        conv_counter += 1
                     
                     writer.add_histogram('distr_'+name, diffs, global_step=global_step)
-
-            writer.add_scalar('all_bn', all_bn, global_step=global_step)
+            
+            writer.add_scalar('all_conv', all_conv/conv_counter, global_step=global_step)
+            writer.add_scalar('all_bn', all_bn/bn_counter, global_step=global_step)
             for name  in model.state_dict():
                 if 'running_var' in name:
                     state = torch.mean(model.state_dict()[name])
@@ -219,7 +233,7 @@ def adjust_learning_rate(optimizer, epoch):
 
 def main():
     # init model, ResNet18() can be also used here for training
-    model = WideResNet(depth=34, widen_factor=3).to(device)
+    model = WideResNet(depth=34, widen_factor=args.width).to(device)
 
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
 

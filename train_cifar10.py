@@ -58,6 +58,8 @@ parser.add_argument('--width', type=int, default=1,
                     help='network width')
 parser.add_argument('--no-early-stop', action='store_true', default=False,
                     help='not use early stop learning rate schedule')
+parser.add_argument('--beta', type=float, default=6.0,
+                    help='lambda parameter of robust regularization')
 
 args = parser.parse_args()
 
@@ -111,7 +113,8 @@ def train(args, model, device, train_loader, optimizer, epoch):
         else:
             loss, x_adv = adv_loss_func(
                 model=model, x_natural=data, y=target, optimizer=optimizer,
-                step_size=args.step_size, epsilon=args.epsilon, perturb_steps=args.num_steps)
+                step_size=args.step_size, epsilon=args.epsilon, perturb_steps=args.num_steps,
+                beta=args.beta)
         
         loss.backward()
 
@@ -252,6 +255,12 @@ def main():
     model = WideResNet(widen_factor=args.width).to(device)
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     
+    if args.adv_method == 'trades':
+        print('========== TRADES ============')
+    elif args.adv_method == 'pgd':
+        print('=========== PGD ==============')
+    else:
+        print('Unknown Methods')
     # Resume if ckpt exist
     init_epoch = 1
     ckpt_path = os.path.join(model_dir, 'ckpt.pt')
