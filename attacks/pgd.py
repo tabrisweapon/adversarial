@@ -11,7 +11,8 @@ def madry_loss(model,
                optimizer,
                step_size=0.007,
                epsilon=0.031,
-               perturb_steps=10,):
+               perturb_steps=10,
+               beta=1.0):
     # define KL-loss
     model.eval()
     batch_size = len(x_natural)

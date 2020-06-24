@@ -21,7 +21,7 @@ def trades_loss(model,
                 step_size=0.003,
                 epsilon=0.031,
                 perturb_steps=10,
-                beta=5.0,
+                beta=6.0,
                 distance='l_inf'):
     # define KL-loss
     criterion_kl = nn.KLDivLoss(size_average=False)
@@ -79,6 +79,6 @@ def trades_loss(model,
     logits = model(x_natural)
     loss_natural = F.cross_entropy(logits, y)
     loss_robust = (1.0 / batch_size) * criterion_kl(F.log_softmax(model(x_adv), dim=1),
-                                                    F.softmax(model(x_natural), dim=1))
+                                                    F.softmax(logits, dim=1))
     loss = loss_natural + beta * loss_robust
     return loss, x_adv
